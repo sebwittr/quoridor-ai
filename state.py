@@ -1,22 +1,30 @@
 from player import Player
+from queue import PriorityQueue
 
 # Wall -> [(pos), dir]
 # walls are defined as (x,y) and "h" or "v" depending if it's horizontal or vertical
-# turn -> 0 is player 1, 1 is player 2
 
 class GameState:
-    def __init__(self, p1=None, p2=None, walls=[], turn=0):
+    def __init__(self, p1=None, p2=None, walls=[]):
         self.p1 = Player((8, 4), 10) if p1 is None else p1
         self.p2 = Player((0, 4), 10) if p2 is None else p2
         self.walls = walls
-        self.turn = turn
     
     def reset_game(self):
-        self = GameState()
-    
+        defaultState = GameState()
+        self.p1 = defaultState.p1
+        self.p2 = defaultState.p2
+        self.walls = defaultState.walls
+
     def is_game_over(self):
-        return self.p1.get_pos()[0] == 8 or self.p2.get_pos()[0] == 0
+        return self.p1.get_pos()[0] == 0 or self.p2.get_pos()[0] == 8
     
+    def winner(self):
+        if self.p1.get_pos()[0] == 0:
+            return 0
+        elif self.p2.get_pos()[0] == 8:
+            return 1
+        return -1
     def get_valid_directions(self, playerPos, newWalls):
         moves = []
         for move in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
@@ -24,28 +32,60 @@ class GameState:
             if (0 <= newPos[0] <= 8 and 0 <= newPos[1] <= 8) and not self.are_blocked(playerPos, newPos, newWalls):
                 moves.append(newPos)
         return moves
-    def is_goal_possible(self, player, newWalls):
-        goalRow = 0 if player == self.p1 else 8
+    
+    # performs A* search to find the fastest path to the goal
+    def fastest_path(self, turn, newWalls=None):
+        if newWalls is None:
+            newWalls = self.walls
+        player = self.p1 if turn == 0 else self.p2
+        goalRow = 0 if turn == 0 else 8
         visited = set()
-        queue = []
-        queue.append(player.get_pos())
-        while len(queue) > 0:
-            curr = queue.pop(0)
+        queue = PriorityQueue()
+        queue.put((8, player.get_pos()))
+
+        paths = {
+            player.get_pos(): [player.get_pos()]
+        }
+        costs = {
+            player.get_pos(): 0
+        }
+
+        while not queue.empty():
+            curr = queue.get()[1]
+            path = paths[curr]
+            cost = costs[curr]
+
+            if curr[0] == goalRow:
+                return paths[curr]
             if curr in visited:
                 continue
             visited.add(curr)
-            if curr[0] == goalRow:
-                return True
-            for move in self.get_valid_directions(curr, newWalls):
-                queue.append(move)
-        return False
+            next_moves = self.get_valid_directions(curr, newWalls)
+            for move in next_moves:
+                if move in visited:
+                    continue
+                new_cost = cost + 1
+                new_priority = new_cost + abs(move[0] - goalRow)
+                queue.put((new_priority, move))
+                if move not in costs:
+                    costs[move] = new_cost
+                    paths[move] = path + [move]
+                else:
+                    lowerPath = new_cost < costs[move]
+                    costs[move] = new_cost if lowerPath else costs[move]
+                    paths[move] = path + [move] if lowerPath else paths[move]
+        return []
+    
+    def is_goal_possible(self, turn, newWalls):
+        path = self.fastest_path(turn, newWalls)
+        return len(path) > 0
 
     # move is of the form [pos] for player moves and [pos, direction]
-    def is_valid_move(self, move):
+    def is_valid_move(self, move, turn):
         move_pos = move[0]
 
-        p = self.p1 if self.turn == 0 else self.p2
-        otherP = self.p2 if self.turn == 0 else self.p1
+        p = self.p1 if turn == 0 else self.p2
+        otherP = self.p2 if turn == 0 else self.p1
         # wall move
         if len(move) == 2:
             move_dir = move[1]
@@ -69,7 +109,7 @@ class GameState:
             # check if players can still reach their goal
             newWalls = self.walls.copy()
             newWalls.append([move_pos, move_dir])
-            if not self.is_goal_possible(p, newWalls) or not self.is_goal_possible(otherP, newWalls):
+            if not self.is_goal_possible(turn, newWalls) or not self.is_goal_possible(1-turn, newWalls):
                 return False
 
         else:
@@ -106,7 +146,6 @@ class GameState:
     
     # are 2 positions blocked by a wall?
     def are_blocked(self, pos1, pos2, walls):
-        # horizontal wall
         dist = abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
         if dist != 1:
             return False
@@ -122,33 +161,53 @@ class GameState:
                     return True
         return False
 
-    def get_valid_moves(self):
+    def get_valid_moves(self, turn):
         moves = []
-        p = self.p1 if self.turn == 0 else self.p2
-        otherP = self.p2 if self.turn == 0 else self.p1
+        p = self.p1 if turn == 0 else self.p2
+        otherP = self.p2 if turn == 0 else self.p1
         validDirections = self.get_valid_directions(p.get_pos(), self.walls)
         playerDist = abs(p.get_pos()[0] - otherP.get_pos()[0]) + abs(p.get_pos()[1] - otherP.get_pos()[1])
+
         if playerDist == 1:
             validDirections += self.get_valid_directions(otherP.get_pos(), self.walls)
+
         for d in validDirections:
-            if self.is_valid_move([d]):
+            if self.is_valid_move([d], turn):
                 moves.append([d])
+
         for row in range(8):
             for col in range(8):
                 for d in ["h", "v"]:
-                    if self.is_valid_move([(row, col), d]):
+                    if self.is_valid_move([(row, col), d], turn):
                         moves.append([(row, col), d])
         return moves
 
-    def make_move(self, move):
-        p = self.p1 if self.turn == 0 else self.p2
-        if len(move) == 2:
-            self.walls.append(move)
-            p.lose_wall()
-        else:
-            p.update_pos(move[0])
-        self.turn = 1 - self.turn
+    def make_move(self, move, turn):
+        nextState = self.get_next_state(move, turn)
+        self.p1 = nextState.p1
+        self.p2 = nextState.p2
+        self.walls = nextState.walls
 
+    def get_next_state(self, move, turn):
+        p1 = None
+        p2 = None
+        walls = self.walls.copy()
+        if turn == 0:
+            p2 = Player(self.p2.get_pos(), self.p2.get_num_walls())
+            if len(move) == 2:
+                p1 = Player(self.p1.get_pos(), self.p1.get_num_walls() - 1)
+                walls.append(move)
+            else:
+                p1 = Player(move[0], self.p1.get_num_walls())
+        else:
+            p1 = Player(self.p1.get_pos(), self.p1.get_num_walls())
+            if len(move) == 2:
+                p2 = Player(self.p2.get_pos(), self.p2.get_num_walls() - 1)
+                walls.append(move)
+            else:
+                p2 = Player(move[0], self.p2.get_num_walls())
+        return GameState(p1, p2, walls)
+    
     def toString(self):
         res = "Player 2 # Walls: " + str(self.p2.get_num_walls()) + "\n"
         p1pos = self.p1.get_pos()
@@ -200,20 +259,23 @@ class GameState:
         res += "Player 1 # Walls: " + str(self.p1.get_num_walls()) + "\n"
         return res
 
-gs = GameState()
-print(gs.toString())
-gs.make_move([(7,4)])
-gs.make_move([(1,4)])
-print(gs.toString())
-gs.make_move([(6,4)])
-gs.make_move([(2,4)])
-print(gs.toString())
-gs.make_move([(5,4)])
-gs.make_move([(3,4)])
-print(gs.toString())
-gs.make_move([(4,4)])
-gs.make_move([(4,3)])
-print(gs.toString())
+# gs = GameState()
+# print(gs.is_goal_possible(0, []))
+# gs.make_move([(7,4)], 0)
+# gs.make_move([(1,4)], 1)
+# print(gs.toString())
+# gs.make_move([(6,4)], 0)
+# gs.make_move([(2,4)], 1)
+# print(gs.toString())
+# gs.make_move([(5,4)], 0)
+# gs.make_move([(3,4)], 1)
+# print(gs.toString())
+# gs.make_move([(4,4)], 0)
+# gs.make_move([(4,3)], 1)
+# print(gs.toString())
+# gs.make_move([(3,3), "v"], 0)
+# gs.make_move([(4,3), "h"], 1)
+# print(gs.toString())
 
 
     
