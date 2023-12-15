@@ -8,7 +8,7 @@ class MinimaxModel:
     # use minimax to find the best move
     def make_move(self, state):
         move, score = self.minimax(state, 1, self.depth, float('-inf'), float('inf'))
-        state.make_move(move, 1)
+        state.make_move(move)
     
     def minimax(self, state, turn, depth, alpha, beta):
         if depth == 0 or state.is_game_over():
@@ -23,8 +23,8 @@ class MinimaxModel:
         minScore = 10000000000
         minAction = None
 
-        for action in state.get_valid_moves(turn):
-            nextAction, curScore = self.minimax(state.get_next_state(action, turn), nextTurn, nextDepth, alpha, beta)
+        for action in state.get_valid_moves():
+            nextAction, curScore = self.minimax(state.get_next_state(action), nextTurn, nextDepth, alpha, beta)
             if curScore < minScore:
                 minScore = curScore
                 minAction = action
@@ -54,7 +54,7 @@ class MinimaxModel:
                 return 10000000000
             elif state.winner() == 0:
                 return -10000000000
-        score = 5 * (len(state.fastest_path(0)) - len(state.fastest_path(1)))
+        score = 5 * (len(state.fastest_path(turn=0)) - len(state.fastest_path(turn=1)))
         score += 1 * (state.p2.numWalls - state.p1.numWalls)
         return score
         
