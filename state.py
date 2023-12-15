@@ -16,6 +16,7 @@ class GameState:
         self.p1 = defaultState.p1
         self.p2 = defaultState.p2
         self.walls = defaultState.walls
+        self.turn = defaultState.turn
 
     def is_game_over(self):
         return self.p1.get_pos()[0] == 0 or self.p2.get_pos()[0] == 8
@@ -33,7 +34,32 @@ class GameState:
             if (0 <= newPos[0] <= 8 and 0 <= newPos[1] <= 8) and not self.are_blocked(playerPos, newPos, newWalls):
                 moves.append(newPos)
         return moves
-    
+    # how many walls can block the player's fastest path to the goal?
+    def walls_blockable(self, turn=None):
+        if turn is None:
+            turn = self.turn
+        path = self.fastest_path(turn=turn)
+        otherWalls = self.p1.get_num_walls() if turn == 1 else self.p2.get_num_walls()
+        
+        if len(path) == 0:
+            return 0
+        
+        if otherWalls == 0:
+            return 0
+
+        blockable = 0
+        for i in range(len(path) - 1):
+            # can wall be placed to block these 2 positions?
+            if path[i][0] == path[i+1][0]:
+                col = min(path[i][1], path[i+1][1])
+                if self.is_valid_move([(path[i][0] - 1, col), "v"]) or self.is_valid_move([(path[i][0], col), "v"]):
+                    blockable += 1
+            else:
+                row = min(path[i][0], path[i+1][0])
+                if self.is_valid_move([(row, path[i][1] - 1), "h"]) or self.is_valid_move([(row, path[i][1]), "h"]):
+                    blockable += 1
+        return blockable
+
     # performs A* search to find the fastest path to the goal
     def fastest_path(self, newWalls=None, turn=None):
         if turn is None:
@@ -85,6 +111,8 @@ class GameState:
 
     # move is of the form [pos] for player moves and [pos, direction]
     def is_valid_move(self, move):
+        if len(move) != 1 and len(move) != 2:
+            return False
         move_pos = move[0]
         
         p = self.p1 if self.turn == 0 else self.p2
@@ -214,12 +242,17 @@ class GameState:
         return GameState(p1, p2, walls, 1 - self.turn)
     
     def toString(self):
-        res = "Player 2 # Walls: " + str(self.p2.get_num_walls()) + "\n"
+        res = "Player 2 # Walls: " + str(self.p2.get_num_walls()) + "\n\n  "
         p1pos = self.p1.get_pos()
         p2pos = self.p2.get_pos()
-
+        for i in range(9):
+            res += str(i) + " "
+        res += "\n"
         for row in range(18):
             prevRow = (row - 1) // 2
+            if row % 2 == 0:
+                res += str(row // 2) + " "
+            else: res += "  "
             for col in range(9):
                 if row % 2 == 0:
                     # empty square is "\u25A1"
@@ -264,7 +297,12 @@ class GameState:
         res += "Player 1 # Walls: " + str(self.p1.get_num_walls()) + "\n"
         return res
 
-# gs = GameState()
+# gs = GameState(Player((4,0), 10), Player((4,8), 10), [[(1,0), "h"], [(1, 2), "h"], [(1, 4), "h"]])
+# gs.make_move([(2,4), "v"])
+# gs.make_move([(5,4), "v"])
+# print(gs.toString())
+# print(gs.fastest_path(turn=0))
+# print(gs.walls_blockable())
 # gs.make_move([(7,4)])
 # gs.make_move([(1,4)])
 # print(gs.toString())
