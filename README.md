@@ -3,6 +3,8 @@ This is an implementation of the game Quoridor with a built in AI player agent.
 
 To learn more about Quoridor, click here: https://en.wikipedia.org/wiki/Quoridor
 
+![image](https://github.com/sebwittr/quoridor-ai/assets/33398322/ac23aedd-4b3f-43fc-9505-f772bd3e35b6)
+
 # Setup
 Pull this repository and run 
 `python3 game.py`
@@ -19,4 +21,7 @@ To adjust the search depth, change the constructor argument to your desired dept
 https://en.wikipedia.org/wiki/Q-learning
 To add new features, modify the `initialize_features` function in `q_model.py`
 The other paramters are set in the constructor of QModel
+
+
+
 
